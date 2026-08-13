@@ -1,0 +1,19 @@
+{
+  "description": "Seal explicit Bubbl markers before Codex submits a prompt.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${PLUGIN_ROOT}/bin/bubl\" codex-hook",
+            "commandWindows": "\"${PLUGIN_ROOT}\\bin\\bubl.exe\" codex-hook",
+            "timeout": 10,
+            "statusMessage": "Sealing Bubbl secrets",
+            "additionalContextLimit": 2500
+          }
+        ]
+      }
+    ]
+  }
+}

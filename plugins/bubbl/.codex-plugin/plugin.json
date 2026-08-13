@@ -1,0 +1,20 @@
+{
+  "name": "bubbl",
+  "version": "0.1.0",
+  "description": "Seal one-use secrets before they reach Codex model context.",
+  "author": {
+    "name": "Bubbl contributors"
+  },
+  "license": "MIT",
+  "keywords": ["secrets", "security", "codex"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Bubbl",
+    "shortDescription": "Seal one-use secrets outside model context.",
+    "longDescription": "Intercept explicit [@bubl …] markers, seal their values locally, and let Codex consume opaque one-use references through the bundled bubl executable.",
+    "developerName": "Bubbl contributors",
+    "category": "Developer Tools",
+    "capabilities": ["Hooks", "Local execution"],
+    "defaultPrompt": ["Use a sealed Bubbl reference safely."]
+  }
+}

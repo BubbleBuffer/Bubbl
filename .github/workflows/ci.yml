@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt -- --check
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo test --all-targets --all-features
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.85.0
+      - run: cargo check --locked --all-targets
+
+  build-plugin:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary: target/x86_64-pc-windows-msvc/release/bubl.exe
+            format: zip
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            binary: target/x86_64-unknown-linux-musl/release/bubl
+            format: tar.gz
+          - os: macos-13
+            target: x86_64-apple-darwin
+            binary: target/x86_64-apple-darwin/release/bubl
+            format: tar.gz
+          - os: macos-14
+            target: aarch64-apple-darwin
+            binary: target/aarch64-apple-darwin/release/bubl
+            format: tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - shell: pwsh
+        run: ./scripts/package-plugin.ps1 -Target '${{ matrix.target }}' -Binary '${{ matrix.binary }}' -Format '${{ matrix.format }}'
+      - shell: pwsh
+        run: |
+          $archive = Get-ChildItem dist/bubbl-*-${{ matrix.target }}.* | Select-Object -First 1
+          if (-not $archive) { throw 'plugin archive missing' }
+      - shell: pwsh
+        run: ./scripts/validate-package.ps1 -PluginRoot "target/package/bubbl-0.1.0-${{ matrix.target }}/bubbl"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bubbl-${{ matrix.target }}
+          path: dist/*

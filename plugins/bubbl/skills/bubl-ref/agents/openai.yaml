@@ -1,0 +1,4 @@
+interface:
+  display_name: "Bubbl Reference"
+  short_description: "Safely use one-use Bubbl secret references"
+  default_prompt: "Use $bubl-ref to consume this Bubbl reference without revealing its secret."

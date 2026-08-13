@@ -1,0 +1,4 @@
+/target/
+/dist/
+/plugins/bubbl/bin/
+*.pdb
