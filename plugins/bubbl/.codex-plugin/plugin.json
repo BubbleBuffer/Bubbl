@@ -1,6 +1,6 @@
 {
   "name": "bubbl",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Seal one-use secrets before they reach Codex model context.",
   "author": {
     "name": "Bubbl contributors"

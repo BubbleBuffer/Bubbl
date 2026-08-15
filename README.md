@@ -67,7 +67,7 @@ chmod +x install.sh
 ./install.sh
 ```
 
-Pass `-Version 1.0.1` on Windows or `--version 1.0.1` on Linux and macOS to pin an exact stable version. By default, the latest stable release is installed. The marketplace is kept at `%LOCALAPPDATA%\Bubbl\marketplace` on Windows or `${XDG_DATA_HOME:-$HOME/.local/share}/bubbl/marketplace` elsewhere; upgrades are staged and the prior copy is restored if Codex rejects the new plugin.
+Pass `-Version 1.0.2` on Windows or `--version 1.0.2` on Linux and macOS to pin an exact stable version. By default, the latest stable release is installed. The marketplace is kept at `%LOCALAPPDATA%\Bubbl\marketplace` on Windows or `${XDG_DATA_HOME:-$HOME/.local/share}/bubbl/marketplace` elsewhere; upgrades are staged and the prior copy is restored if Codex rejects the new plugin.
 
 After installation, open `/hooks`, inspect and trust the Bubbl `UserPromptSubmit` command, and then start a new task so Codex loads the plugin.
 

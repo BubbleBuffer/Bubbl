@@ -60,6 +60,7 @@ fn release_workflow_is_tag_only_and_attests_assets() {
     assert!(release.contains("assemble-draft:"));
     assert!(release.contains("needs: assemble-draft"));
     assert!(release.contains("test \"${actual[*]}\" = \"${wanted[*]}\""));
+    assert!(release.contains("sudo apt-get update && sudo apt-get install --yes musl-tools"));
     assert!(
         release.find("actions/attest@").unwrap() < release.find("environment: release").unwrap()
     );

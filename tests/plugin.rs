@@ -12,7 +12,7 @@ fn manifest_is_minimal_and_points_to_the_skill() {
         serde_json::from_str(&fs::read_to_string(root.join(".codex-plugin/plugin.json")).unwrap())
             .unwrap();
     assert_eq!(manifest["name"], "bubbl");
-    assert_eq!(manifest["version"], "1.0.1");
+    assert_eq!(manifest["version"], "1.0.2");
     assert_eq!(manifest["license"], "MIT");
     assert_eq!(manifest["skills"], "./skills/");
     assert!(manifest.get("mcpServers").is_none());
