@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)][string]$Archive,
-    [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+$')][string]$Version = '1.0.2',
+    [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+$')][string]$Version = '1.0.3',
     [ValidatePattern('^[0-9a-fA-F]{40}$')][string]$ExpectedCommit = '0123456789abcdef0123456789abcdef01234567'
 )
 
@@ -131,3 +131,4 @@ exit 0
     Remove-Item Env:BUBBL_TEST_RELEASE, Env:BUBBL_TEST_COMMIT, Env:BUBBL_TEST_VERSION, Env:BUBBL_TEST_ARCHIVE_NAME, Env:BUBBL_TEST_MARKET_FILE, Env:BUBBL_TEST_FAIL_ATTESTATION, Env:BUBBL_TEST_FAIL_ADD -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $temp) { Remove-Item -Recurse -Force -LiteralPath $temp }
 }
+exit 0
