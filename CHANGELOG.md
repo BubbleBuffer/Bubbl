@@ -2,6 +2,10 @@
 
 All notable changes to Bubbl are recorded here.
 
+## [1.0.3] - 2026-08-16
+
+- Ensured the Windows installer test process exits successfully after its expected failure-path checks.
+
 ## [1.0.2] - 2026-08-16
 
 - Isolated the RustSec audit from the Rust 1.85 MSRV toolchain in release preflight.
