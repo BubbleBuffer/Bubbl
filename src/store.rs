@@ -38,16 +38,28 @@ impl Store {
 
     pub fn seal(&self, secret: &[u8]) -> Result<String> {
         let expires = unix_seconds(SystemTime::now() + TTL)?;
-        self.seal_until(secret, expires)
+        self.prepare_secret(secret)?;
+        self.seal_validated(secret, expires)
     }
 
     pub fn seal_batch<'a>(
         &self,
         secrets: impl IntoIterator<Item = &'a [u8]>,
     ) -> Result<Vec<String>> {
-        let mut tokens = Vec::new();
+        let secrets = secrets.into_iter().collect::<Vec<_>>();
+        if secrets.is_empty() {
+            return Ok(Vec::new());
+        }
+        for secret in &secrets {
+            validate_secret(secret)?;
+        }
+
+        let expires = unix_seconds(SystemTime::now() + TTL)?;
+        self.ensure_root()?;
+        self.cleanup();
+        let mut tokens = Vec::with_capacity(secrets.len());
         for secret in secrets {
-            match self.seal(secret) {
+            match self.seal_validated(secret, expires) {
                 Ok(token) => tokens.push(token),
                 Err(error) => {
                     for token in &tokens {
@@ -60,27 +72,38 @@ impl Store {
         Ok(tokens)
     }
 
+    #[cfg(test)]
     fn seal_until(&self, secret: &[u8], expires: u64) -> Result<String> {
+        self.prepare_secret(secret)?;
+        self.seal_validated(secret, expires)
+    }
+
+    fn prepare_secret(&self, secret: &[u8]) -> Result<()> {
         validate_secret(secret)?;
         self.ensure_root()?;
         self.cleanup();
+        Ok(())
+    }
 
+    fn seal_validated(&self, secret: &[u8], expires: u64) -> Result<String> {
         for _ in 0..4 {
-            let mut capability = [0_u8; CAPABILITY_BYTES];
-            getrandom::fill(&mut capability).map_err(|_| Error::Crypto)?;
-            let token = format!("{CAPABILITY_PREFIX}{}", URL_SAFE_NO_PAD.encode(capability));
+            let mut capability = Zeroizing::new([0_u8; CAPABILITY_BYTES]);
+            getrandom::fill(capability.as_mut()).map_err(|_| Error::Crypto)?;
+            let token = format!(
+                "{CAPABILITY_PREFIX}{}",
+                URL_SAFE_NO_PAD.encode(capability.as_ref())
+            );
             let paths = self.paths(&capability);
 
             if paths.ready.exists() || paths.claimed.exists() {
-                capability.zeroize();
                 continue;
             }
 
-            let mut key = derive_key("bubbl v1 encryption key", &capability);
+            let key = Zeroizing::new(derive_key("bubbl v1 encryption key", capability.as_ref()));
             let mut nonce = [0_u8; NONCE_LEN];
             getrandom::fill(&mut nonce).map_err(|_| Error::Crypto)?;
             let aad = aad(expires);
-            let cipher = XChaCha20Poly1305::new(Key::from_slice(&key));
+            let cipher = XChaCha20Poly1305::new(Key::from_slice(key.as_ref()));
             let ciphertext = cipher
                 .encrypt(
                     XNonce::from_slice(&nonce),
@@ -90,8 +113,6 @@ impl Store {
                     },
                 )
                 .map_err(|_| Error::Crypto)?;
-            key.zeroize();
-            capability.zeroize();
 
             let mut blob = Vec::with_capacity(HEADER_LEN + ciphertext.len());
             blob.extend_from_slice(MAGIC);
@@ -109,7 +130,7 @@ impl Store {
     pub fn claim(&self, token: &str) -> Result<ClaimedBubble> {
         self.ensure_root().map_err(|_| Error::Unavailable)?;
         self.cleanup();
-        let mut capability = decode_capability(token).ok_or(Error::Unavailable)?;
+        let capability = Zeroizing::new(decode_capability(token).ok_or(Error::Unavailable)?);
         let paths = self.paths(&capability);
 
         fs::hard_link(&paths.ready, &paths.claimed).map_err(|_| Error::Unavailable)?;
@@ -118,14 +139,12 @@ impl Store {
             return Err(Error::Unavailable);
         }
         let result = self.read_claimed(&paths.claimed, &capability);
-        capability.zeroize();
 
         match result {
             Ok(secret) => Ok(ClaimedBubble {
                 secret,
                 ready: paths.ready,
                 claimed: paths.claimed,
-                popped: false,
             }),
             Err(_) => {
                 let _ = fs::remove_file(paths.claimed);
@@ -135,11 +154,10 @@ impl Store {
     }
 
     pub fn discard(&self, token: &str) {
-        if let Some(mut capability) = decode_capability(token) {
+        if let Some(capability) = decode_capability(token).map(Zeroizing::new) {
             let paths = self.paths(&capability);
             let _ = fs::remove_file(paths.ready);
             let _ = fs::remove_file(paths.claimed);
-            capability.zeroize();
         }
     }
 
@@ -169,8 +187,8 @@ impl Store {
 
         let nonce_start = MAGIC.len() + 8;
         let nonce_end = nonce_start + NONCE_LEN;
-        let mut key = derive_key("bubbl v1 encryption key", capability);
-        let cipher = XChaCha20Poly1305::new(Key::from_slice(&key));
+        let key = Zeroizing::new(derive_key("bubbl v1 encryption key", capability));
+        let cipher = XChaCha20Poly1305::new(Key::from_slice(key.as_ref()));
         let plaintext = cipher
             .decrypt(
                 XNonce::from_slice(&blob[nonce_start..nonce_end]),
@@ -180,7 +198,6 @@ impl Store {
                 },
             )
             .map_err(|_| Error::Unavailable);
-        key.zeroize();
         blob.zeroize();
         plaintext.map(Zeroizing::new)
     }
@@ -256,7 +273,6 @@ pub struct ClaimedBubble {
     secret: Zeroizing<Vec<u8>>,
     ready: PathBuf,
     claimed: PathBuf,
-    popped: bool,
 }
 
 impl ClaimedBubble {
@@ -266,14 +282,12 @@ impl ClaimedBubble {
 
     pub fn pop(&mut self) -> Result<()> {
         fs::remove_file(&self.claimed).map_err(Error::Storage)?;
-        self.popped = true;
         Ok(())
     }
 
-    pub fn restore(mut self) -> Result<()> {
+    pub fn restore(self) -> Result<()> {
         fs::hard_link(&self.claimed, &self.ready).map_err(Error::Storage)?;
         fs::remove_file(&self.claimed).map_err(Error::Storage)?;
-        self.popped = true;
         Ok(())
     }
 }
@@ -427,6 +441,51 @@ mod tests {
         let token = store.seal(b"secret").unwrap();
         store.claim(&token).unwrap().restore().unwrap();
         assert!(store.claim(&token).is_ok());
+    }
+
+    #[test]
+    fn batch_validation_is_atomic_and_empty_batches_are_side_effect_free() {
+        let (_temp, store) = store();
+        assert!(store.seal_batch(std::iter::empty()).unwrap().is_empty());
+        assert!(!store.root().exists());
+
+        let error = store
+            .seal_batch([b"valid".as_slice(), b"invalid\nsecret".as_slice()])
+            .unwrap_err();
+        assert!(matches!(error, Error::InvalidInput(_)));
+        assert!(!store.root().exists());
+    }
+
+    #[test]
+    fn invalid_secrets_and_capabilities_have_no_distinguishing_side_effects() {
+        let (_temp, store) = store();
+        for secret in [b"".as_slice(), b"line\nbreak", b"nul\0byte", &[0xff]] {
+            assert!(matches!(store.seal(secret), Err(Error::InvalidInput(_))));
+        }
+        assert!(!store.root().exists());
+
+        for token in ["", "b1_short", "wrong_AAAAAAAAAAAAAAAAAAAAAA"] {
+            assert_eq!(
+                store.claim(token).err().unwrap().public_message(),
+                "bubl: bubble unavailable"
+            );
+        }
+    }
+
+    #[test]
+    fn sealing_cleans_expired_bubbles_but_preserves_unrelated_files() {
+        let (_temp, store) = store();
+        let expired = store.seal_until(b"expired", 1).unwrap();
+        let mut capability = decode_capability(&expired).unwrap();
+        let expired_path = store.paths(&capability).ready;
+        capability.zeroize();
+        let unrelated = store.root().join("keep.txt");
+        fs::write(&unrelated, b"keep").unwrap();
+
+        let fresh = store.seal(b"fresh").unwrap();
+        assert!(!expired_path.exists());
+        assert!(unrelated.exists());
+        store.discard(&fresh);
     }
 
     #[test]

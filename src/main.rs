@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use bubl::runner::{self, Delivery};
 use bubl::store::Store;
 use bubl::{Error, Result};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 const USAGE: &str = "Usage:\n  bubl seal\n  bubl run TOKEN --stdin -- PROGRAM [ARGS...]\n  bubl run TOKEN --env NAME -- PROGRAM [ARGS...]\n  bubl codex-hook\n  bubl --version";
 
@@ -46,13 +46,11 @@ fn execute() -> Result<i32> {
 }
 
 fn seal(store: &Store) -> Result<i32> {
-    let mut secret = Vec::new();
+    let mut secret = Zeroizing::new(Vec::new());
     std::io::stdin()
         .read_to_end(&mut secret)
         .map_err(Error::Storage)?;
-    let result = store.seal(&secret);
-    secret.zeroize();
-    let token = result?;
+    let token = store.seal(&secret)?;
     println!("{token}");
     Ok(0)
 }
@@ -76,7 +74,7 @@ fn run(store: &Store, args: Vec<OsString>) -> Result<i32> {
 }
 
 fn codex_hook(store: &Store) -> Result<i32> {
-    let mut raw = String::new();
+    let mut raw = Zeroizing::new(String::new());
     std::io::stdin()
         .read_to_string(&mut raw)
         .map_err(Error::Storage)?;

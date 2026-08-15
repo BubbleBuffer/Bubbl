@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>With Bubbl</title>
+    <link rel="stylesheet" href="transcript.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>With Bubbl</h1>
+        <div class="meta">Illustrative Bubbl flow</div>
+      </header>
+      <section class="transcript">
+        <div class="row user">
+          <div class="label">User</div>
+          <p>Authenticate the demo API using <code>[@bubl <span class="token">sk-example-7F3A-NOT-A-REAL-KEY</span>]</code>.</p>
+        </div>
+        <div class="row">
+          <div class="label ok">Local hook · intercepted and sealed</div>
+          <p><code class="token">sk-example-7F3A-NOT-A-REAL-KEY</code> → <code>[@bubl-ref b1_X7m2Q9vR4xT8nL3cD6Fw]</code></p>
+          <p>The raw turn is blocked. Only the sanitized request continues.</p>
+        </div>
+        <div class="row">
+          <div class="label">Agent · next accepted turn</div>
+          <pre>bubl run b1_X7m2Q9vR4xT8nL3cD6Fw --stdin -- python verify_token.py</pre>
+        </div>
+        <div class="row result">
+          <div class="label ok">Result</div>
+          <p><code>Demo API authenticated</code></p>
+        </div>
+      </section>
+      <div class="footnote">Illustrative walkthrough · example API key is fake · reference is one-use</div>
+    </main>
+  </body>
+</html>

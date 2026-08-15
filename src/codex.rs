@@ -107,4 +107,35 @@ mod tests {
         assert!(handle_prompt("bad [@bubl nope", Path::new("/bubl"), &store).is_err());
         assert!(!store.root().exists());
     }
+
+    #[test]
+    fn current_hook_payload_fields_are_accepted_and_multiple_secrets_stay_hidden() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = Store::new(temp.path().join("store"));
+        let mut raw = serde_json::json!({
+            "cwd": "/workspace",
+            "hook_event_name": "UserPromptSubmit",
+            "model": "gpt-5.6-sol",
+            "permission_mode": "dontAsk",
+            "prompt": "use [@bubl first-canary] and [@bubl second-canary]",
+            "session_id": "session",
+            "transcript_path": null,
+            "turn_id": "turn"
+        })
+        .to_string();
+
+        let output = handle_json(&mut raw, Path::new("/plugin/bin/bubl"), &store)
+            .unwrap()
+            .unwrap();
+        assert!(raw.bytes().all(|byte| byte == 0));
+        assert!(!output.contains("first-canary"));
+        assert!(!output.contains("second-canary"));
+        assert_eq!(output.matches("[@bubl-ref b1_").count(), 2);
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(parsed["decision"], "block");
+        assert_eq!(
+            parsed["reason"],
+            "Bubbl sealed 2 secret(s). The sanitized request will be included with your next message."
+        );
+    }
 }

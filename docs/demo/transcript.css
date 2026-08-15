@@ -1,0 +1,117 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+  background: #080b10;
+  color: #eef2f7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 1200px;
+  height: 675px;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(43, 112, 255, 0.18), transparent 34%),
+    #080b10;
+}
+
+main {
+  width: 1080px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.meta {
+  color: #8f9bab;
+  font-size: 16px;
+}
+
+.transcript {
+  display: grid;
+  gap: 16px;
+}
+
+.row {
+  border: 1px solid #263140;
+  border-radius: 16px;
+  background: rgba(18, 24, 33, 0.96);
+  padding: 18px 22px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
+}
+
+.row.user {
+  margin-left: 118px;
+  border-color: #3c4a5f;
+  background: #1b2431;
+}
+
+.label {
+  margin-bottom: 8px;
+  color: #8f9bab;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.label.ok {
+  color: #65d99a;
+}
+
+.label.blocked {
+  color: #ffb45f;
+}
+
+p,
+pre {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.45;
+}
+
+code,
+pre {
+  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+code {
+  color: #d7e4ff;
+}
+
+.token {
+  color: #ffcf82;
+}
+
+.result {
+  border-color: rgba(67, 192, 122, 0.45);
+  background: rgba(26, 61, 43, 0.55);
+}
+
+.footnote {
+  margin-top: 18px;
+  color: #778496;
+  font-size: 14px;
+  text-align: right;
+}

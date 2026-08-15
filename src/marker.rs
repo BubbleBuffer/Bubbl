@@ -180,4 +180,26 @@ mod tests {
     fn malformed_later_marker_rejects_the_entire_prompt() {
         assert!(parse("[@bubl valid] then [@bubl broken").is_err());
     }
+
+    #[test]
+    fn unicode_and_marker_like_text_preserve_byte_boundaries() {
+        let parsed = parse("🙂 prefix [@bubl 密钥] suffix [@bubl-ref existing]")
+            .unwrap()
+            .unwrap();
+        assert_eq!(parsed.secrets().next().unwrap(), "密钥".as_bytes());
+        assert_eq!(
+            parsed.render(&["b1_token".into()]).unwrap(),
+            "🙂 prefix [@bubl-ref b1_token] suffix [@bubl-ref existing]"
+        );
+    }
+
+    #[test]
+    fn near_misses_remain_literal_and_bare_names_are_rejected() {
+        for input in ["[@bubl-ref token]", "[@bublish secret]", "x[@bubl_secret]"] {
+            assert!(parse(input).unwrap().is_none(), "{input:?}");
+        }
+        for input in ["[@bubl]", "prefix [@bubl"] {
+            assert!(parse(input).is_err(), "{input:?}");
+        }
+    }
 }
