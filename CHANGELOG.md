@@ -2,6 +2,10 @@
 
 All notable changes to Bubbl are recorded here.
 
+## [1.0.4] - 2026-08-16
+
+- Expanded the Codex plugin description to explain the safety-alignment problem, local one-use delivery flow, and server-boundary limitation.
+
 ## [1.0.3] - 2026-08-16
 
 - Ensured the Windows installer test process exits successfully after its expected failure-path checks.

@@ -1,7 +1,7 @@
 {
   "name": "bubbl",
-  "version": "1.0.3",
-  "description": "Seal one-use secrets before they reach Codex model context.",
+  "version": "1.0.4",
+  "description": "Help Codex use API keys and tokens through locally sealed, one-use references instead of raw values in model context.",
   "author": {
     "name": "Bubbl contributors"
   },
@@ -10,8 +10,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Bubbl",
-    "shortDescription": "Seal one-use secrets outside model context.",
-    "longDescription": "Intercept explicit [@bubl …] markers, seal their values locally, and let Codex consume opaque one-use references through the bundled bubl executable.",
+    "shortDescription": "Use API keys and tokens through local, one-use references.",
+    "longDescription": "Bubbl helps Codex use API keys and tokens that safety alignment may otherwise refuse to handle. Type an explicit [@bubl …] marker and Bubbl intercepts it, seals the value locally, and gives Codex an opaque one-use reference for stdin or environment-variable delivery. This reduces accidental exposure in model context, commands, transcripts, and logs, but does not guarantee the original prompt never reached OpenAI's servers.",
     "developerName": "Bubbl contributors",
     "category": "Developer Tools",
     "capabilities": ["Hooks", "Local execution"],
