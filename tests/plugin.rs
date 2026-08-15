@@ -12,9 +12,17 @@ fn manifest_is_minimal_and_points_to_the_skill() {
         serde_json::from_str(&fs::read_to_string(root.join(".codex-plugin/plugin.json")).unwrap())
             .unwrap();
     assert_eq!(manifest["name"], "bubbl");
-    assert_eq!(manifest["version"], "1.0.3");
+    assert_eq!(manifest["version"], "1.0.4");
     assert_eq!(manifest["license"], "MIT");
     assert_eq!(manifest["skills"], "./skills/");
+    let short = manifest["interface"]["shortDescription"].as_str().unwrap();
+    let long = manifest["interface"]["longDescription"].as_str().unwrap();
+    assert!(short.contains("API keys and tokens"));
+    assert!(short.contains("one-use references"));
+    assert!(long.contains("safety alignment"));
+    assert!(long.contains("stdin or environment-variable delivery"));
+    assert!(long.contains("does not guarantee"));
+    assert!(long.contains("OpenAI's servers"));
     assert!(manifest.get("mcpServers").is_none());
     assert!(manifest.get("apps").is_none());
     assert!(manifest.get("hooks").is_none());

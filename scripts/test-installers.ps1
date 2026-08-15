@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)][string]$Archive,
-    [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+$')][string]$Version = '1.0.3',
+    [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+$')][string]$Version = '1.0.4',
     [ValidatePattern('^[0-9a-fA-F]{40}$')][string]$ExpectedCommit = '0123456789abcdef0123456789abcdef01234567'
 )
 
