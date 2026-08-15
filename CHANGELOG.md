@@ -2,6 +2,10 @@
 
 All notable changes to Bubbl are recorded here.
 
+## [1.0.1] - 2026-08-15
+
+- Fixed Rust 1.85 Clippy compatibility in the release preflight.
+
 ## [1.0.0] - 2026-08-15
 
 - Added local authenticated encryption for short-lived one-use secret bubbles.

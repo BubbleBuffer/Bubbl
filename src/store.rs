@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -228,10 +229,10 @@ impl Store {
 
     fn paths(&self, capability: &[u8; CAPABILITY_BYTES]) -> Paths {
         let name = blake3::derive_key("bubbl v1 storage name", capability);
-        let stem = name
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
+        let mut stem = String::with_capacity(name.len() * 2);
+        for byte in name {
+            write!(&mut stem, "{byte:02x}").expect("writing to a String cannot fail");
+        }
         Paths {
             ready: self.root.join(format!("{stem}.ready")),
             claimed: self.root.join(format!("{stem}.claimed")),
