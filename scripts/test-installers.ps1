@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$Archive,
-    [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+$')][string]$Version = '1.0.4',
-    [ValidatePattern('^[0-9a-fA-F]{40}$')][string]$ExpectedCommit = '0123456789abcdef0123456789abcdef01234567'
+    [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+$')][string]$Version = '1.0.5',
+    [ValidatePattern('^[0-9a-fA-F]{40}$')][string]$ExpectedCommit = '0123456789abcdef0123456789abcdef01234567',
+    [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+$')][string]$QuickReleaseVersion
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,7 +19,11 @@ function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
 }
 function Invoke-Installer([string]$InstallRoot) {
-    & pwsh -NoProfile -NonInteractive -File (Join-Path $repo 'install.ps1') -Version $Version -InstallRoot $InstallRoot 2>&1 | Out-Host
+    & pwsh -NoProfile -NonInteractive -File (Join-Path $repo 'install.ps1') -Version $Version -InstallRoot $InstallRoot -Strict 2>&1 | Out-Host
+    return $LASTEXITCODE
+}
+function Invoke-QuickInstaller([string]$InstallRoot) {
+    & pwsh -NoProfile -NonInteractive -File (Join-Path $repo 'install.ps1') -Version $QuickReleaseVersion -InstallRoot $InstallRoot 2>&1 | Out-Host
     return $LASTEXITCODE
 }
 function Set-FixtureArchive([string]$Source) {
@@ -33,6 +38,7 @@ try {
     Set-Content -LiteralPath (Join-Path $temp 'bin/codex.cmd') -Encoding ascii -Value '@pwsh -NoProfile -NonInteractive -File "%~dp0codex.ps1" %*'
     Set-Content -LiteralPath (Join-Path $temp 'bin/gh.ps1') -Encoding utf8NoBOM -Value @'
 $all = [string]::Join(' ', $args)
+if ($env:BUBBL_TEST_FAIL_GH -eq '1') { exit 99 }
 if ($env:BUBBL_TEST_FAIL_ATTESTATION -eq '1' -and $all -like 'attestation verify*') { exit 1 }
 if ($args[0] -eq 'api') { Write-Output $env:BUBBL_TEST_COMMIT; exit 0 }
 if ($args[0] -eq 'release' -and $args[1] -eq 'list') { Write-Output ('v' + $env:BUBBL_TEST_VERSION); exit 0 }
@@ -72,6 +78,16 @@ exit 0
     $env:BUBBL_TEST_ARCHIVE_NAME = $archiveName
     $env:BUBBL_TEST_MARKET_FILE = Join-Path $temp 'market.txt'
     Set-FixtureArchive $Archive
+
+    if ($QuickReleaseVersion) {
+        $quick = Join-Path $temp 'quick/marketplace'
+        $env:BUBBL_TEST_FAIL_GH = '1'
+        Assert-True ((Invoke-QuickInstaller $quick) -eq 0) 'quick install failed'
+        Assert-True (Test-Path -LiteralPath (Join-Path $quick 'plugins/bubbl/bin/bubl.exe')) 'quick installed binary missing'
+        $env:BUBBL_TEST_FAIL_GH = '0'
+        Remove-Item -Recurse -Force -LiteralPath (Join-Path $temp 'quick')
+        Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $env:BUBBL_TEST_MARKET_FILE
+    }
 
     $install = Join-Path $temp 'installed/marketplace'
     Assert-True ((Invoke-Installer $install) -eq 0) 'first install failed'
@@ -128,7 +144,7 @@ exit 0
 } finally {
     $env:PATH = $oldPath
     $env:LOCALAPPDATA = $oldLocalAppData
-    Remove-Item Env:BUBBL_TEST_RELEASE, Env:BUBBL_TEST_COMMIT, Env:BUBBL_TEST_VERSION, Env:BUBBL_TEST_ARCHIVE_NAME, Env:BUBBL_TEST_MARKET_FILE, Env:BUBBL_TEST_FAIL_ATTESTATION, Env:BUBBL_TEST_FAIL_ADD -ErrorAction SilentlyContinue
+    Remove-Item Env:BUBBL_TEST_RELEASE, Env:BUBBL_TEST_COMMIT, Env:BUBBL_TEST_VERSION, Env:BUBBL_TEST_ARCHIVE_NAME, Env:BUBBL_TEST_MARKET_FILE, Env:BUBBL_TEST_FAIL_ATTESTATION, Env:BUBBL_TEST_FAIL_ADD, Env:BUBBL_TEST_FAIL_GH -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $temp) { Remove-Item -Recurse -Force -LiteralPath $temp }
 }
 exit 0

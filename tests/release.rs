@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -47,6 +48,42 @@ fn installers_accept_only_verified_official_releases() {
             );
         }
     }
+}
+
+#[test]
+fn installers_expose_simple_default_and_strict_verification() {
+    let powershell = Command::new("pwsh")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            root().join("install.ps1").to_str().unwrap(),
+            "-Help",
+        ])
+        .output()
+        .unwrap();
+    assert!(powershell.status.success());
+    let powershell_help = String::from_utf8(powershell.stdout).unwrap();
+    assert!(powershell_help.contains("-Strict"));
+    assert!(powershell_help.contains("does not require GitHub CLI"));
+
+    let mut shell_path = root()
+        .join("install.sh")
+        .to_str()
+        .unwrap()
+        .replace('\\', "/");
+    if cfg!(windows) {
+        let drive = shell_path[..1].to_ascii_lowercase();
+        shell_path = format!("/mnt/{drive}/{}", &shell_path[3..]);
+    }
+    let shell = Command::new("bash")
+        .args([shell_path.as_str(), "--help"])
+        .output()
+        .unwrap();
+    assert!(shell.status.success());
+    let shell_help = String::from_utf8(shell.stdout).unwrap();
+    assert!(shell_help.contains("--strict"));
+    assert!(shell_help.contains("does not require GitHub CLI"));
 }
 
 #[test]

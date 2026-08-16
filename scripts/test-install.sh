@@ -16,6 +16,7 @@ mkdir -p "$temp/bin" "$temp/release" "$temp/home" "$temp/data"
 cat >"$temp/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ "${BUBBL_TEST_FAIL_GH:-0}" == 1 ]]; then exit 99; fi
 if [[ "${BUBBL_TEST_FAIL_ATTESTATION:-0}" == 1 && "$1 $2" == 'attestation verify' ]]; then exit 1; fi
 if [[ "$1" == api ]]; then printf '%s\n' "$BUBBL_TEST_COMMIT"; exit 0; fi
 if [[ "$1 $2" == 'release list' ]]; then printf 'v%s\n' "$BUBBL_TEST_VERSION"; exit 0; fi
@@ -26,6 +27,34 @@ if [[ "$1 $2" == 'release download' ]]; then
   cp "$BUBBL_TEST_RELEASE/$BUBBL_TEST_ARCHIVE_NAME" "$BUBBL_TEST_RELEASE/SHA256SUMS.txt" "$destination/"
 fi
 exit 0
+EOF
+cat >"$temp/bin/curl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+url=''
+output=''
+while (($#)); do
+  case "$1" in
+    -o) output=$2; shift 2 ;;
+    http://*|https://*) url=$1; shift ;;
+    *) shift ;;
+  esac
+done
+case "$url" in
+  */releases/latest|*/releases/tags/*)
+    printf '{\n  "tag_name": "v%s",\n  "draft": false,\n  "prerelease": false,\n  "immutable": true\n}\n' "$BUBBL_TEST_VERSION"
+    ;;
+  */commits/*)
+    printf '{\n  "sha": "%s"\n}\n' "$BUBBL_TEST_COMMIT"
+    ;;
+  */releases/download/*/SHA256SUMS.txt)
+    cp "$BUBBL_TEST_RELEASE/SHA256SUMS.txt" "$output"
+    ;;
+  */releases/download/*/*)
+    cp "$BUBBL_TEST_RELEASE/$BUBBL_TEST_ARCHIVE_NAME" "$output"
+    ;;
+  *) printf 'unexpected curl URL: %s\n' "$url" >&2; exit 2 ;;
+esac
 EOF
 cat >"$temp/bin/codex" <<'EOF'
 #!/usr/bin/env bash
@@ -43,7 +72,7 @@ if [[ "${1:-} ${2:-} ${3:-}" == 'plugin marketplace remove' ]]; then rm -f "$BUB
 if [[ "${1:-} ${2:-}" == 'plugin add' && "${BUBBL_TEST_FAIL_ADD:-0}" == 1 ]]; then exit 9; fi
 exit 0
 EOF
-chmod +x "$temp/bin/gh" "$temp/bin/codex"
+chmod +x "$temp/bin/gh" "$temp/bin/codex" "$temp/bin/curl"
 
 export PATH="$temp/bin:$PATH"
 export HOME="$temp/home"
@@ -61,13 +90,24 @@ set_archive() {
 }
 run_installer() {
   set +e
-  bash "$repo/install.sh" --version "$version" --install-root "$temp/installed/marketplace" >"$temp/installer.log" 2>&1
+  bash "$repo/install.sh" --version "$version" --install-root "$temp/installed/marketplace" --strict >"$temp/installer.log" 2>&1
+  result=$?
+  set -e
+  return "$result"
+}
+run_quick_installer() {
+  set +e
+  BUBBL_TEST_FAIL_GH=1 bash "$repo/install.sh" --version "$version" --install-root "$temp/quick/marketplace" >"$temp/quick-installer.log" 2>&1
   result=$?
   set -e
   return "$result"
 }
 
 set_archive "$archive"
+if ! run_quick_installer; then cat "$temp/quick-installer.log" >&2; exit 1; fi
+test -x "$temp/quick/marketplace/plugins/bubbl/bin/bubl"
+grep -Fq 'checksum-verified immutable release' "$temp/quick-installer.log"
+rm -rf -- "$temp/quick" "$BUBBL_TEST_MARKET_FILE"
 if ! run_installer; then cat "$temp/installer.log" >&2; exit 1; fi
 test -x "$temp/installed/marketplace/plugins/bubbl/bin/bubl"
 printf old >"$temp/installed/marketplace/upgrade-sentinel"

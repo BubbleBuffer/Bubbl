@@ -96,7 +96,7 @@ fn version_has_expected_shape() {
     let output = bubl().arg("--version").output().unwrap();
     assert_eq!(
         String::from_utf8(output.stdout).unwrap().trim(),
-        "bubl 1.0.4"
+        "bubl 1.0.5"
     );
 }
 
