@@ -118,7 +118,12 @@ done < <(tar -tvzf "$archive" | awk '{print substr($1, 1, 1)}')
 expanded="$temp/expanded"
 mkdir -p -- "$expanded"
 tar -xzf "$archive" -C "$expanded"
-candidate=$(find "$expanded" -mindepth 1 -maxdepth 1 -type d -exec test -f '{}/BUILD-INFO.json' \; -print | head -n 1)
+candidate=''
+for directory in "$expanded"/*; do
+  [[ -d "$directory" && -f "$directory/BUILD-INFO.json" ]] || continue
+  candidate=$directory
+  break
+done
 [[ -n "$candidate" ]] || { printf 'Archive does not contain a Bubbl marketplace root.\n' >&2; exit 1; }
 
 read_json_value() {

@@ -109,3 +109,54 @@ fn release_workflow_is_tag_only_and_attests_assets() {
     assert!(!ci.contains("actions/attest@"));
     assert!(!ci.contains("gh release create"));
 }
+
+#[test]
+fn release_automation_covers_native_and_public_installation() {
+    let release = fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
+    assert!(release.contains("if: matrix.target != 'x86_64-pc-windows-msvc'"));
+
+    let shell_harness = fs::read_to_string(root().join("scripts/test-install.sh")).unwrap();
+    for target in [
+        "x86_64-unknown-linux-musl",
+        "x86_64-apple-darwin",
+        "aarch64-apple-darwin",
+    ] {
+        assert!(shell_harness.contains(target), "missing {target} harness");
+    }
+    let shell_installer = fs::read_to_string(root().join("install.sh")).unwrap();
+    assert!(!shell_installer.contains("-mindepth"));
+    assert!(!shell_installer.contains("-maxdepth"));
+
+    let smoke = fs::read_to_string(root().join(".github/workflows/release-smoke.yml")).unwrap();
+    for required in [
+        "workflow_run:",
+        "workflows: [Release]",
+        "types: [completed]",
+        "github.event.workflow_run.conclusion == 'success'",
+        "schedule:",
+        "windows-2025",
+        "ubuntu-24.04",
+        "macos-15-intel",
+        "macos-15",
+        "npm install --global @openai/codex@latest",
+        "releases/download/",
+        "smoke-installed.ps1",
+    ] {
+        assert!(smoke.contains(required), "public smoke lacks {required}");
+    }
+
+    let smoke_script = fs::read_to_string(root().join("scripts/smoke-installed.ps1")).unwrap();
+    for required in [
+        "plugin marketplace list --json",
+        "plugin list --marketplace bubbl-release --json",
+        "codex-hook",
+        "--stdin",
+        "--env",
+        "bubble reuse unexpectedly succeeded",
+    ] {
+        assert!(
+            smoke_script.contains(required),
+            "smoke script lacks {required}"
+        );
+    }
+}

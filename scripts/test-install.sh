@@ -6,9 +6,10 @@ repo=$(cd -- "$(dirname -- "$0")/.." && pwd)
 archive=$(cd -- "$(dirname -- "$1")" && pwd)/$(basename -- "$1")
 commit=${2:-0123456789abcdef0123456789abcdef01234567}
 archive_basename=$(basename -- "$archive")
-[[ "$archive_basename" =~ ^bubbl-([0-9]+\.[0-9]+\.[0-9]+)-x86_64-unknown-linux-musl\.tar\.gz$ ]] || { printf 'Unexpected archive name.\n' >&2; exit 2; }
+[[ "$archive_basename" =~ ^bubbl-([0-9]+\.[0-9]+\.[0-9]+)-(x86_64-unknown-linux-musl|x86_64-apple-darwin|aarch64-apple-darwin)\.tar\.gz$ ]] || { printf 'Unexpected archive name.\n' >&2; exit 2; }
 version=${BASH_REMATCH[1]}
-release_name="bubbl-$version-x86_64-unknown-linux-musl.tar.gz"
+target=${BASH_REMATCH[2]}
+release_name="bubbl-$version-$target.tar.gz"
 temp=$(mktemp -d "${TMPDIR:-/tmp}/bubbl-installer-tests.XXXXXX")
 trap 'rm -rf -- "$temp"' EXIT
 mkdir -p "$temp/bin" "$temp/release" "$temp/home" "$temp/data"
@@ -85,7 +86,11 @@ export BUBBL_TEST_MARKET_FILE="$temp/market.txt"
 release_archive="$temp/release/$release_name"
 set_archive() {
   cp "$1" "$release_archive"
-  hash=$(sha256sum "$release_archive" | awk '{print $1}')
+  if command -v sha256sum >/dev/null; then
+    hash=$(sha256sum "$release_archive" | awk '{print $1}')
+  else
+    hash=$(shasum -a 256 "$release_archive" | awk '{print $1}')
+  fi
   printf '%s  %s\n' "$hash" "$release_name" >"$temp/release/SHA256SUMS.txt"
 }
 run_installer() {

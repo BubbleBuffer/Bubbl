@@ -46,6 +46,14 @@ $commit = git rev-parse HEAD
 4. Inspect the draft, then approve the protected `release` environment. The gated job verifies the draft asset set and publishes it. With immutable releases enabled, publication locks the tag and assets and adds GitHub's release attestation.
 5. Verify from a clean directory, then perform the disposable canary flow in a new Codex task.
 
+Publishing also starts the `Published release smoke` workflow on native Windows,
+Linux, Intel macOS, and Apple Silicon macOS runners. It installs the public
+release through the current Codex CLI, verifies the registered marketplace and
+plugin, exercises hook sanitization plus stdin and environment delivery, rejects
+reference reuse, and repeats the install in strict attestation mode. The same
+matrix checks the latest release every Monday and can be run manually. A human
+must still review and trust the hook in the Codex UI before the final canary.
+
 Do not create a release manually, reuse assets from a local build, replace a published asset, or offer a repository clone as an installation route.
 
 ## Independent verification
