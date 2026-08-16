@@ -53,6 +53,7 @@ fn installers_accept_only_verified_official_releases() {
 #[test]
 fn installers_expose_simple_default_and_strict_verification() {
     let powershell = Command::new("pwsh")
+        .env_remove("LOCALAPPDATA")
         .args([
             "-NoProfile",
             "-NonInteractive",

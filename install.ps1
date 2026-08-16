@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+$')][string]$Version,
-    [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'Bubbl\marketplace'),
+    [string]$InstallRoot,
     [switch]$Strict,
     [switch]$Help
 )
@@ -19,6 +19,13 @@ if ($Help) {
     Write-Output 'Default: install an immutable release with GitHub asset-digest, SHA-256, and package checks. This does not require GitHub CLI or a GitHub account.'
     Write-Output 'Strict: add GitHub release and artifact-attestation verification; requires an authenticated GitHub CLI.'
     return
+}
+
+if (-not $InstallRoot) {
+    if (-not $env:LOCALAPPDATA) {
+        throw 'LOCALAPPDATA is unavailable. Supply -InstallRoot explicitly.'
+    }
+    $InstallRoot = Join-Path $env:LOCALAPPDATA 'Bubbl\marketplace'
 }
 
 function Invoke-Checked([string]$File, [string[]]$Arguments) {
