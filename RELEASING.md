@@ -33,9 +33,9 @@ Simulate the Windows package and installer without touching the global Codex con
 ```powershell
 cargo build --release --locked --target x86_64-pc-windows-msvc
 $commit = git rev-parse HEAD
-.\scripts\package-plugin.ps1 -Target x86_64-pc-windows-msvc -Binary .\target\x86_64-pc-windows-msvc\release\bubl.exe -Format zip -SourceCommit $commit -SourceRef refs/tags/v1.0.4
-.\scripts\validate-package.ps1 -PackageRoot .\target\package\bubbl-1.0.4-x86_64-pc-windows-msvc -ExpectedTarget x86_64-pc-windows-msvc -ExpectedCommit $commit
-.\scripts\test-installers.ps1 -Archive .\dist\bubbl-1.0.4-x86_64-pc-windows-msvc.zip
+.\scripts\package-plugin.ps1 -Target x86_64-pc-windows-msvc -Binary .\target\x86_64-pc-windows-msvc\release\bubl.exe -Format zip -SourceCommit $commit -SourceRef refs/tags/v1.0.5
+.\scripts\validate-package.ps1 -PackageRoot .\target\package\bubbl-1.0.5-x86_64-pc-windows-msvc -ExpectedTarget x86_64-pc-windows-msvc -ExpectedCommit $commit
+.\scripts\test-installers.ps1 -Archive .\dist\bubbl-1.0.5-x86_64-pc-windows-msvc.zip -ExpectedCommit $commit
 ```
 
 ## Publish
@@ -46,19 +46,27 @@ $commit = git rev-parse HEAD
 4. Inspect the draft, then approve the protected `release` environment. The gated job verifies the draft asset set and publishes it. With immutable releases enabled, publication locks the tag and assets and adds GitHub's release attestation.
 5. Verify from a clean directory, then perform the disposable canary flow in a new Codex task.
 
+Publishing also starts the `Published release smoke` workflow on native Windows,
+Linux, Intel macOS, and Apple Silicon macOS runners. It installs the public
+release through the current Codex CLI, verifies the registered marketplace and
+plugin, exercises hook sanitization plus stdin and environment delivery, rejects
+reference reuse, and repeats the install in strict attestation mode. The same
+matrix checks the latest release every Monday and can be run manually. A human
+must still review and trust the hook in the Codex UI before the final canary.
+
 Do not create a release manually, reuse assets from a local build, replace a published asset, or offer a repository clone as an installation route.
 
 ## Independent verification
 
-For `v1.0.4` on Windows x64:
+For `v1.0.5` on Windows x64:
 
 ```powershell
-gh release verify v1.0.4 --repo BubbleBuffer/Bubbl
-gh release download v1.0.4 --repo BubbleBuffer/Bubbl --pattern bubbl-1.0.4-x86_64-pc-windows-msvc.zip --pattern SHA256SUMS.txt
-gh release verify-asset v1.0.4 .\bubbl-1.0.4-x86_64-pc-windows-msvc.zip --repo BubbleBuffer/Bubbl
-$commit = gh api repos/BubbleBuffer/Bubbl/commits/v1.0.4 --jq .sha
-gh attestation verify .\bubbl-1.0.4-x86_64-pc-windows-msvc.zip --repo BubbleBuffer/Bubbl --signer-workflow github.com/BubbleBuffer/Bubbl/.github/workflows/release.yml --source-ref refs/tags/v1.0.4 --source-digest $commit --deny-self-hosted-runners
-Get-FileHash -Algorithm SHA256 .\bubbl-1.0.4-x86_64-pc-windows-msvc.zip
+gh release verify v1.0.5 --repo BubbleBuffer/Bubbl
+gh release download v1.0.5 --repo BubbleBuffer/Bubbl --pattern bubbl-1.0.5-x86_64-pc-windows-msvc.zip --pattern SHA256SUMS.txt
+gh release verify-asset v1.0.5 .\bubbl-1.0.5-x86_64-pc-windows-msvc.zip --repo BubbleBuffer/Bubbl
+$commit = gh api repos/BubbleBuffer/Bubbl/commits/v1.0.5 --jq .sha
+gh attestation verify .\bubbl-1.0.5-x86_64-pc-windows-msvc.zip --repo BubbleBuffer/Bubbl --signer-workflow github.com/BubbleBuffer/Bubbl/.github/workflows/release.yml --source-ref refs/tags/v1.0.5 --source-digest $commit --deny-self-hosted-runners
+Get-FileHash -Algorithm SHA256 .\bubbl-1.0.5-x86_64-pc-windows-msvc.zip
 ```
 
-Compare the resulting lowercase digest to the archive's line in `SHA256SUMS.txt`. The archive's `BUILD-INFO.json` must name `BubbleBuffer/Bubbl`, `v1.0.4`, the expected target, and the same full commit reported by `gh api repos/BubbleBuffer/Bubbl/commits/v1.0.4 --jq .sha`.
+Compare the resulting lowercase digest to the archive's line in `SHA256SUMS.txt`. The archive's `BUILD-INFO.json` must name `BubbleBuffer/Bubbl`, `v1.0.5`, the expected target, and the same full commit reported by `gh api repos/BubbleBuffer/Bubbl/commits/v1.0.5 --jq .sha`.

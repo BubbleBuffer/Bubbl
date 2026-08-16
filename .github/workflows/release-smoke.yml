@@ -1,0 +1,86 @@
+name: Published release smoke
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: published-release-smoke
+  cancel-in-progress: false
+
+jobs:
+  resolve-release:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]
+          printf 'tag=%s\n' "$tag" >>"$GITHUB_OUTPUT"
+          printf 'version=%s\n' "${BASH_REMATCH[1]}" >>"$GITHUB_OUTPUT"
+
+  smoke:
+    needs: resolve-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2025
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: macos-15
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      CODEX_HOME: ${{ runner.temp }}/codex-home
+      RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}
+      RELEASE_VERSION: ${{ needs.resolve-release.outputs.version }}
+      INSTALL_ROOT: ${{ runner.temp }}/bubbl-marketplace
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install current Codex CLI
+        shell: pwsh
+        run: |
+          $prefix = Join-Path $env:RUNNER_TEMP 'codex-cli'
+          npm install --global @openai/codex@latest --prefix $prefix
+          $bin = if ($IsWindows) { $prefix } else { Join-Path $prefix 'bin' }
+          $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - run: codex --version
+      - name: Install and smoke test the public Windows release
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'install.ps1'
+          Invoke-WebRequest "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:RELEASE_TAG/install.ps1" -OutFile $installer
+          & $installer -Version $env:RELEASE_VERSION -InstallRoot $env:INSTALL_ROOT
+          ./scripts/smoke-installed.ps1 -InstallRoot $env:INSTALL_ROOT -Version $env:RELEASE_VERSION -ExpectedTarget '${{ matrix.target }}'
+          & $installer -Version $env:RELEASE_VERSION -InstallRoot $env:INSTALL_ROOT -Strict
+      - name: Install and smoke test the public POSIX release
+        if: matrix.target != 'x86_64-pc-windows-msvc'
+        shell: bash
+        run: |
+          installer="$RUNNER_TEMP/install.sh"
+          curl -fsSL "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/install.sh" -o "$installer"
+          chmod 755 "$installer"
+          "$installer" --version "$RELEASE_VERSION" --install-root "$INSTALL_ROOT"
+          pwsh -NoProfile -NonInteractive -File ./scripts/smoke-installed.ps1 -InstallRoot "$INSTALL_ROOT" -Version "$RELEASE_VERSION" -ExpectedTarget '${{ matrix.target }}'
+          "$installer" --version "$RELEASE_VERSION" --install-root "$INSTALL_ROOT" --strict

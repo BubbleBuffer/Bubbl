@@ -2,6 +2,12 @@
 
 All notable changes to Bubbl are recorded here.
 
+## [1.0.5] - 2026-08-16
+
+- Made checksum-verified installation from immutable GitHub releases the default, without requiring a GitHub account or GitHub CLI.
+- Kept release and artifact-attestation verification available through explicit strict installer modes.
+- Added a compact flow diagram and refreshed the README examples in BubblePaw's black, warm-white, and coral-orange palette.
+
 ## [1.0.4] - 2026-08-16
 
 - Expanded the Codex plugin description to explain the safety-alignment problem, local one-use delivery flow, and server-boundary limitation.

@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+$')][string]$Version,
-    [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'Bubbl\marketplace')
+    [string]$InstallRoot,
+    [switch]$Strict,
+    [switch]$Help
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,6 +12,21 @@ $Repository = 'BubbleBuffer/Bubbl'
 $Marketplace = 'bubbl-release'
 $SignerWorkflow = 'github.com/BubbleBuffer/Bubbl/.github/workflows/release.yml'
 $Target = 'x86_64-pc-windows-msvc'
+$ApiRoot = "https://api.github.com/repos/$Repository"
+
+if ($Help) {
+    Write-Output 'Usage: .\install.ps1 [-Version X.Y.Z] [-InstallRoot PATH] [-Strict]'
+    Write-Output 'Default: install an immutable release with GitHub asset-digest, SHA-256, and package checks. This does not require GitHub CLI or a GitHub account.'
+    Write-Output 'Strict: add GitHub release and artifact-attestation verification; requires an authenticated GitHub CLI.'
+    return
+}
+
+if (-not $InstallRoot) {
+    if (-not $env:LOCALAPPDATA) {
+        throw 'LOCALAPPDATA is unavailable. Supply -InstallRoot explicitly.'
+    }
+    $InstallRoot = Join-Path $env:LOCALAPPDATA 'Bubbl\marketplace'
+}
 
 function Invoke-Checked([string]$File, [string[]]$Arguments) {
     & $File @Arguments
@@ -28,41 +45,76 @@ function Find-Codex {
     throw 'Codex CLI not found. Install or update the Codex app first.'
 }
 
-$ghCommand = Get-Command gh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $ghCommand) { throw 'GitHub CLI (gh) is required.' }
-$gh = $ghCommand.Source
-Invoke-Checked $gh @('auth', 'status')
-Invoke-Checked $gh @('attestation', 'verify', '--help')
-Invoke-Checked $gh @('release', 'verify', '--help')
+function Get-ReleaseAsset($Release, [string]$Name) {
+    $asset = $Release.assets | Where-Object { $_.name -eq $Name } | Select-Object -First 1
+    if (-not $asset) { throw "Release asset is missing: $Name" }
+    return $asset
+}
+
+function Save-ReleaseAsset($Asset, [string]$Destination) {
+    $oldProgress = $ProgressPreference
+    $ProgressPreference = 'SilentlyContinue'
+    try {
+        Invoke-WebRequest -UseBasicParsing -Headers @{ 'User-Agent' = 'Bubbl-Installer' } -Uri $Asset.browser_download_url -OutFile $Destination
+    } finally { $ProgressPreference = $oldProgress }
+    if ($Asset.digest -notmatch '^sha256:([0-9a-fA-F]{64})$') { throw "Release asset has no SHA-256 digest: $($Asset.name)" }
+    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $Destination).Hash.ToLowerInvariant()
+    if ($actual -ne $Matches[1].ToLowerInvariant()) { throw "Release asset digest mismatch: $($Asset.name)" }
+}
+
 $codex = Find-Codex
 Invoke-Checked $codex @('plugin', '--help')
 
-if ($Version) {
-    $tag = "v$Version"
+if ($Strict) {
+    $ghCommand = Get-Command gh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $ghCommand) { throw 'Strict verification requires GitHub CLI (gh).' }
+    $gh = $ghCommand.Source
+    Invoke-Checked $gh @('auth', 'status')
+    Invoke-Checked $gh @('attestation', 'verify', '--help')
+    Invoke-Checked $gh @('release', 'verify', '--help')
+    if ($Version) {
+        $tag = "v$Version"
+    } else {
+        $tag = (& $gh release list -R $Repository --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName').Trim()
+        if ($LASTEXITCODE -ne 0 -or $tag -notmatch '^v([0-9]+\.[0-9]+\.[0-9]+)$') { throw 'No stable Bubbl release found.' }
+        $Version = $Matches[1]
+    }
+    $sourceCommit = (& $gh api "repos/$Repository/commits/$tag" --jq .sha).Trim().ToLowerInvariant()
+    if ($LASTEXITCODE -ne 0 -or $sourceCommit -notmatch '^[0-9a-f]{40}$') { throw 'Could not resolve the release commit.' }
 } else {
-    $tag = (& $gh release list -R $Repository --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName').Trim()
-    if ($LASTEXITCODE -ne 0 -or $tag -notmatch '^v([0-9]+\.[0-9]+\.[0-9]+)$') { throw 'No stable Bubbl release found.' }
+    $headers = @{ 'User-Agent' = 'Bubbl-Installer'; 'Accept' = 'application/vnd.github+json' }
+    $releaseUri = if ($Version) { "$ApiRoot/releases/tags/v$Version" } else { "$ApiRoot/releases/latest" }
+    $release = Invoke-RestMethod -Headers $headers -Uri $releaseUri
+    if ($release.draft -or $release.prerelease -or -not $release.immutable -or $release.tag_name -notmatch '^v([0-9]+\.[0-9]+\.[0-9]+)$') {
+        throw 'Bubbl release is not stable and immutable.'
+    }
+    $tag = $release.tag_name
     $Version = $Matches[1]
+    $commitInfo = Invoke-RestMethod -Headers $headers -Uri "$ApiRoot/commits/$tag"
+    $sourceCommit = ([string]$commitInfo.sha).ToLowerInvariant()
+    if ($sourceCommit -notmatch '^[0-9a-f]{40}$') { throw 'Could not resolve the release commit.' }
 }
 $archiveName = "bubbl-$Version-$Target.zip"
 $sourceRef = "refs/tags/$tag"
-$sourceCommit = (& $gh api "repos/$Repository/commits/$tag" --jq .sha).Trim().ToLowerInvariant()
-if ($LASTEXITCODE -ne 0 -or $sourceCommit -notmatch '^[0-9a-f]{40}$') { throw 'Could not resolve the release commit.' }
 
 $temp = Join-Path ([System.IO.Path]::GetTempPath()) ("bubbl-install-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $temp | Out-Null
 try {
-    Invoke-Checked $gh @('release', 'verify', $tag, '-R', $Repository)
-    if (-not $PSCommandPath) { throw 'Run install.ps1 from a downloaded file.' }
-    Invoke-Checked $gh @('release', 'verify-asset', $tag, $PSCommandPath, '-R', $Repository)
-    Invoke-Checked $gh @('attestation', 'verify', $PSCommandPath, '-R', $Repository, '--signer-workflow', $SignerWorkflow, '--source-ref', $sourceRef, '--source-digest', $sourceCommit, '--deny-self-hosted-runners')
-    Invoke-Checked $gh @('release', 'download', $tag, '-R', $Repository, '-D', $temp, '-p', $archiveName, '-p', 'SHA256SUMS.txt')
-
     $archive = Join-Path $temp $archiveName
     $checksums = Join-Path $temp 'SHA256SUMS.txt'
-    foreach ($asset in @($archive, $checksums)) {
-        Invoke-Checked $gh @('release', 'verify-asset', $tag, $asset, '-R', $Repository)
-        Invoke-Checked $gh @('attestation', 'verify', $asset, '-R', $Repository, '--signer-workflow', $SignerWorkflow, '--source-ref', $sourceRef, '--source-digest', $sourceCommit, '--deny-self-hosted-runners')
+    if ($Strict) {
+        Invoke-Checked $gh @('release', 'verify', $tag, '-R', $Repository)
+        if (-not $PSCommandPath) { throw 'Run install.ps1 from a downloaded file.' }
+        Invoke-Checked $gh @('release', 'verify-asset', $tag, $PSCommandPath, '-R', $Repository)
+        Invoke-Checked $gh @('attestation', 'verify', $PSCommandPath, '-R', $Repository, '--signer-workflow', $SignerWorkflow, '--source-ref', $sourceRef, '--source-digest', $sourceCommit, '--deny-self-hosted-runners')
+        Invoke-Checked $gh @('release', 'download', $tag, '-R', $Repository, '-D', $temp, '-p', $archiveName, '-p', 'SHA256SUMS.txt')
+        foreach ($asset in @($archive, $checksums)) {
+            Invoke-Checked $gh @('release', 'verify-asset', $tag, $asset, '-R', $Repository)
+            Invoke-Checked $gh @('attestation', 'verify', $asset, '-R', $Repository, '--signer-workflow', $SignerWorkflow, '--source-ref', $sourceRef, '--source-digest', $sourceCommit, '--deny-self-hosted-runners')
+        }
+    } else {
+        Save-ReleaseAsset (Get-ReleaseAsset $release $archiveName) $archive
+        Save-ReleaseAsset (Get-ReleaseAsset $release 'SHA256SUMS.txt') $checksums
     }
     $expectedLine = Get-Content -LiteralPath $checksums | Where-Object { $_ -match "^[0-9a-fA-F]{64}  $([regex]::Escape($archiveName))$" } | Select-Object -First 1
     if (-not $expectedLine) { throw "$archiveName is absent from SHA256SUMS.txt" }
@@ -129,7 +181,8 @@ try {
         throw
     }
     if (Test-Path -LiteralPath $previous) { Remove-Item -Recurse -Force -LiteralPath $previous }
-    Write-Output "Bubbl $Version installed from verified release $tag ($sourceCommit)."
+    $verification = if ($Strict) { 'attestation-verified' } else { 'checksum-verified immutable' }
+    Write-Output "Bubbl $Version installed from $verification release $tag ($sourceCommit)."
     Write-Output 'Open /hooks, inspect and trust the Bubbl UserPromptSubmit hook, then start a new task.'
 } finally {
     if (Test-Path -LiteralPath $temp) { Remove-Item -Recurse -Force -LiteralPath $temp }
